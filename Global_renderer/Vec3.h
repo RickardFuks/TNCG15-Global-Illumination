@@ -41,6 +41,14 @@ struct Vec3
         return Vec3(-x, -y, -z);
     }
 
+    Vec3 operator*(const Vec3& other) const
+    {
+        return Vec3(
+            x * other.x,
+            y * other.y,
+            z * other.z
+        );
+    }
     Vec3 operator*(double scalar) const
     {
         return Vec3(
