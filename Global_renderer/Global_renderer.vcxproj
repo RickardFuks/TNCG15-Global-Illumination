@@ -139,11 +139,17 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Intersection.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Scene.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="HitRecord.h" />
+    <ClInclude Include="Image.h" />
+    <ClInclude Include="Intersection.h" />
     <ClInclude Include="Material.h" />
     <ClInclude Include="Ray.h" />
+    <ClInclude Include="Sphere.h" />
     <ClInclude Include="Triangle.h" />
     <ClInclude Include="Vec3.h" />
   </ItemGroup>
