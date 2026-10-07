@@ -12,6 +12,186 @@
 #include "Scene.h"
 #include "Image.h"
 #include "Tetrahedron.h"
+
+bool intersectScene(
+    const Ray& ray,
+    const std::vector<Triangle>& room,
+    const std::vector<Triangle>& tetrahedron,
+    const Sphere& sphere,
+    double tMin,
+    double tMax,
+    HitRecord& closestHit
+)
+{
+    bool hasHit = false;
+    double closestT = tMax;
+
+    for (const Triangle& triangle : room)
+    {
+        HitRecord hit;
+
+        if (intersectTriangle(ray, triangle, tMin, closestT, hit))
+        {
+            hasHit = true;
+            closestT = hit.t;
+            closestHit = hit;
+        }
+    }
+
+    for (const Triangle& triangle : tetrahedron)
+    {
+        HitRecord hit;
+
+        if (intersectTriangle(ray, triangle, tMin, closestT, hit))
+        {
+            hasHit = true;
+            closestT = hit.t;
+            closestHit = hit;
+        }
+    }
+
+    {
+        HitRecord hit;
+
+        if (intersectSphere(ray, sphere, tMin, closestT, hit))
+        {
+            hasHit = true;
+            closestT = hit.t;
+            closestHit = hit;
+        }
+    }
+
+    return hasHit;
+}
+
+bool isInShadow(
+    const Vec3& point,
+    const Vec3& normal,
+    const PointLight& light,
+    const std::vector<Triangle>& room,
+    const std::vector<Triangle>& tetrahedron,
+    const Sphere& sphere
+)
+{
+    const double epsilon = 0.001;
+
+    const Vec3 shadowOrigin = point + normal * epsilon;
+    const Vec3 shadowToLight = light.position - shadowOrigin;
+
+    const double distanceToLight = shadowToLight.length();
+
+    Ray shadowRay(
+        shadowOrigin,
+        shadowToLight
+    );
+
+    HitRecord shadowHit;
+
+    if (intersectScene(
+        shadowRay,
+        room,
+        tetrahedron,
+        sphere,
+        epsilon,
+        distanceToLight - epsilon,
+        shadowHit
+    ))
+    {
+        return true;
+    }
+
+    return false;
+}
+
+
+Vec3 traceRay(
+    const Ray& ray,
+    const std::vector<Triangle>& room,
+    const std::vector<Triangle>& tetrahedron,
+    const Sphere& sphere,
+    const PointLight& light,
+    int depth
+)
+{
+    if (depth <= 0)
+    {
+        return Vec3(0.0, 0.0, 0.0);
+    }
+
+    HitRecord hit;
+
+    if (!intersectScene(
+        ray,
+        room,
+        tetrahedron,
+        sphere,
+        0.001,
+        1e30,
+        hit
+    ))
+    {
+        return Vec3(0.0, 0.0, 0.0);
+    }
+
+    // Diffuse shading
+    if (hit.material.type == MaterialType::Diffuse)
+    {
+        if (isInShadow(
+            hit.point,
+            hit.normal,
+            light,
+            room,
+            tetrahedron,
+            sphere
+        ))
+        {
+            return Vec3(0.0, 0.0, 0.0);
+        }
+
+        const Vec3 toLight = light.position - hit.point;
+        const double distanceSquared = toLight.lengthSquared();
+        const Vec3 lightDirection = toLight.normalized();
+
+        const double cosOmega = std::max(
+            0.0,
+            dot(hit.normal, lightDirection)
+        );
+
+        const double irradiance =
+            light.intensity * cosOmega / distanceSquared;
+
+        return hit.material.color * light.color * irradiance;
+    }
+
+    // Perfect mirror
+    if (hit.material.type == MaterialType::Mirror)
+    {
+        const double epsilon = 0.001;
+
+        const Vec3 d = ray.direction;
+        const Vec3 N = hit.normal;
+
+        const Vec3 reflectedDirection =
+            d - N * (2.0 * dot(d, N));
+
+        Ray reflectedRay(
+            hit.point + N * epsilon,
+            reflectedDirection
+        );
+
+        return traceRay(
+            reflectedRay,
+            room,
+            tetrahedron,
+            sphere,
+            light,
+            depth - 1
+        );
+    }
+
+    return Vec3(0.0, 0.0, 0.0);
+}
+
 int main()
 {
     const int resolution = 1000;
@@ -41,12 +221,12 @@ int main()
         Vec3(0.0, 0.0, 0.0)
     );
 
-    // Loop through every pixel
+	// Loop over each pixel in the image
     for (int j = 0; j < resolution; ++j)
     {
         for (int i = 0; i < resolution; ++i)
         {
-            // Center of the current pixel on the view plane
+			// Calculate the y and z coordinates of the pixel in the view plane
             const double y =
                 1.5 + (i + 0.5) * delta;
 
@@ -58,99 +238,21 @@ int main()
                 y,
                 z
             );
-
-            // Ray from the eye through this pixel
+			// Create a ray from the eye to the pixel point
             Ray ray(
                 eye,
                 pixelPoint - eye
             );
-
-			// Initialize the closest intersection distance to a large value
-            double closestT = 1e30;
-
-            bool hasHit = false;
-            HitRecord closestHit;
-
-            Vec3 pixelColor(
-                0.0,
-                0.0,
-                0.0
+			// Trace the ray and get the color
+            Vec3 pixelColor = traceRay(
+                ray,
+                room,
+                tetrahedron,
+                sphere,
+                light,
+                4
             );
-
-
-
-            // Test ray against every triangle in the room
-            for (const Triangle& triangle : room)
-            {
-                HitRecord hit;
-
-                if (intersectTriangle(
-                    ray,
-                    triangle,
-                    0.001,
-                    closestT,
-                    hit
-                ))
-                {
-                    closestT = hit.t;
-                    closestHit = hit;
-                    hasHit = true;
-                }
-            }
-            for (const Triangle& triangle : tetrahedron)
-            {
-                HitRecord hit;
-
-                if (intersectTriangle(
-                    ray,
-                    triangle,
-                    0.001,
-                    closestT,
-                    hit
-                ))
-                {
-                    closestT = hit.t;
-                    closestHit = hit;
-                    hasHit = true;
-                }
-            }
-            {
-                HitRecord hit;
-
-                if (intersectSphere(ray, sphere, 0.001, closestT, hit))
-                {
-                    closestT = hit.t;
-                    closestHit = hit;
-                    hasHit = true;
-                }
-            }
-            if (hasHit)
-            {
-                Vec3 toLight =
-                    light.position - closestHit.point;
-
-                const double distanceSquared =
-                    toLight.lengthSquared();
-
-                const Vec3 lightDirection =
-                    toLight.normalized();
-
-                const double cosOmega = std::max(
-                    0.0,
-                    dot(closestHit.normal, lightDirection)
-                );
-
-                const double irradiance =
-                    light.intensity
-                    * cosOmega
-                    / distanceSquared;
-
-                pixelColor =
-                    closestHit.material.color
-                    * light.color
-                    * irradiance;
-            }
-            // Store the final color for this pixel
+			// Store the color in the pixel array
             pixels[j * resolution + i] = pixelColor;
         }
     }

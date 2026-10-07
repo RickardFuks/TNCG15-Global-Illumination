@@ -11,9 +11,9 @@ inline std::vector<Triangle> createRoom()
         Vec3(0.8, 0.2, 0.2)
     );
 
-    const Material green(
+    const Material yellow(
         MaterialType::Diffuse,
-        Vec3(0.2, 0.8, 0.2)
+        Vec3(0.8, 0.8, 0.2)
     );
 
     const Material blue(
@@ -24,6 +24,10 @@ inline std::vector<Triangle> createRoom()
     const Material white(
         MaterialType::Diffuse,
         Vec3(0.8, 0.8, 0.8)
+    );
+    const Material mirror(
+        MaterialType::Mirror,
+        Vec3(1.0, 1.0, 1.0)
     );
 
     std::vector<Triangle> triangles;
@@ -36,9 +40,9 @@ inline std::vector<Triangle> createRoom()
 
     // x = 4, inward normal -x
     triangles.emplace_back(
-        Vec3(4, 0, 0), Vec3(4, 0, 4), Vec3(4, 4, 4), white);
+        Vec3(4, 0, 0), Vec3(4, 0, 4), Vec3(4, 4, 4), mirror);
     triangles.emplace_back(
-        Vec3(4, 0, 0), Vec3(4, 4, 4), Vec3(4, 4, 0), white);
+        Vec3(4, 0, 0), Vec3(4, 4, 4), Vec3(4, 4, 0), mirror);
 
     // y = 0, inward normal +y
     triangles.emplace_back(
@@ -48,9 +52,9 @@ inline std::vector<Triangle> createRoom()
 
     // y = 4, inward normal -y
     triangles.emplace_back(
-        Vec3(0, 4, 0), Vec3(4, 4, 0), Vec3(4, 4, 4), green);
+        Vec3(0, 4, 0), Vec3(4, 4, 0), Vec3(4, 4, 4), yellow);
     triangles.emplace_back(
-        Vec3(0, 4, 0), Vec3(4, 4, 4), Vec3(0, 4, 4), green);
+        Vec3(0, 4, 0), Vec3(4, 4, 4), Vec3(0, 4, 4), yellow);
 
     // z = 0, floor, inward normal +z
     triangles.emplace_back(
