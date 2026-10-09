@@ -201,7 +201,7 @@ Vec3 refractDirection(
         d * eta
         + N * (eta * cosTheta - cosThetaT);
 }
-
+// Generate a random direction in the hemisphere around the normal N
 Vec3 randomCosineDirection(const Vec3& N)
 {
     const double x = randomDouble();
@@ -241,7 +241,7 @@ Vec3 randomCosineDirection(const Vec3& N)
         + N * localZ
         ).normalized();
 }
-
+//Mucho important 
 Vec3 traceRay(
     const Ray& ray,
     const std::vector<Triangle>& room,
@@ -341,7 +341,8 @@ Vec3 traceRay(
             depth - 1,
             useMonteCarloDiffuse
         );
-
+		// Combine direct and indirect light, scaling the indirect light by the material color and rho
+		//Russian roulette termination: scale the indirect light by the material color and rho to account for the probability of continuing the path
         return directLight + (hit.material.color / rho) * indirectLight;
     }
 
@@ -477,17 +478,17 @@ Vec3 traceRay(
 
 int main()
 {
-    const int resolution = 500;
+	const int resolution = 500; //Change to apply variable resolution
 
     const Vec3 eye(0.5, 2.0, 2.0);
 
-    const bool useMonteCarloDiffuse = false;
+    const bool useMonteCarloDiffuse = true;
     const double viewPlaneX = 1.0;
     const double delta = 1.0 / resolution;
 
     std::vector<Triangle> room = createRoom();
     std::vector<Triangle> tetrahedron = createTetrahedron();
-	// Create a sphere with center at (3.00, 1.30, 0.61), radius 0.60, and diffuse material with color (0.9, 0.9, 0.9)
+	
     Sphere sphere(
         Vec3(3.00, 1.30, 1.0),
         0.60,
@@ -509,7 +510,7 @@ int main()
         Vec3(0.0, 0.0, 0.0)
     );
 
-    const int samplesPerPixel = 200;
+	const int samplesPerPixel = 500; //Change to apply variable samples per pixel
     const auto startTime = std::chrono::high_resolution_clock::now();
 
     for (int j = 0; j < resolution; ++j)
