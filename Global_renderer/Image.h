@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <cmath>
 
 #include "Vec3.h"
 
@@ -20,17 +21,37 @@ inline void writePPM(
     file << width << " " << height << "\n";
     file << "255\n";
 
+    const double exposure = 0.8;
+
     for (const Vec3& color : pixels)
     {
-        const int r = static_cast<int>(
-            255.0 * std::clamp(color.x, 0.0, 1.0));
+        // Prevent negative values
+        const double rLinear = std::max(0.0, color.x);
+        const double gLinear = std::max(0.0, color.y);
+        const double bLinear = std::max(0.0, color.z);
 
-        const int g = static_cast<int>(
-            255.0 * std::clamp(color.y, 0.0, 1.0));
+        // Simple exponential tone mapping
+        double r = 1.0 - std::exp(-rLinear * exposure);
+        double g = 1.0 - std::exp(-gLinear * exposure);
+        double b = 1.0 - std::exp(-bLinear * exposure);
 
-        const int b = static_cast<int>(
-            255.0 * std::clamp(color.z, 0.0, 1.0));
+        // Gamma correction, gamma ~= 0.5
+        r = std::sqrt(r);
+        g = std::sqrt(g);
+        b = std::sqrt(b);
 
-        file << r << " " << g << " " << b << "\n";
+        const int ir = static_cast<int>(
+            255.0 * std::clamp(r, 0.0, 1.0)
+            );
+
+        const int ig = static_cast<int>(
+            255.0 * std::clamp(g, 0.0, 1.0)
+            );
+
+        const int ib = static_cast<int>(
+            255.0 * std::clamp(b, 0.0, 1.0)
+            );
+
+        file << ir << " " << ig << " " << ib << "\n";
     }
 }
