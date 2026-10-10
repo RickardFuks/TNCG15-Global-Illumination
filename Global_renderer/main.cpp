@@ -5,7 +5,8 @@
 #include <cmath>
 #include <chrono>
 
-#include "PointLight.h"
+//#include "PointLight.h"
+#include "AreaLight.h"
 #include "Vec3.h"
 #include "Ray.h"
 #include "Material.h"
@@ -22,11 +23,11 @@ bool intersectScene(
     const Ray& ray,
     const std::vector<Triangle>& room,
     const std::vector<Triangle>& tetrahedron,
+    const std::vector<Triangle>& lightGeometry,
     const Sphere& sphere,
     double tMin,
     double tMax,
     HitRecord& closestHit
-
 )
 {
     bool hasHit = false;
@@ -56,6 +57,24 @@ bool intersectScene(
         }
     }
 
+    for (const Triangle& triangle : lightGeometry)
+    {
+        HitRecord hit;
+
+        if (intersectTriangle(
+            ray,
+            triangle,
+            tMin,
+            closestT,
+            hit
+        ))
+        {
+            hasHit = true;
+            closestT = hit.t;
+            closestHit = hit;
+        }
+    }
+
     {
         HitRecord hit;
 
@@ -73,7 +92,7 @@ bool intersectScene(
 bool isInShadow(
     const Vec3& point,
     const Vec3& normal,
-    const PointLight& light,
+    const Vec3& lightPoint,
     const std::vector<Triangle>& room,
     const std::vector<Triangle>& tetrahedron,
     const Sphere& sphere
@@ -81,10 +100,14 @@ bool isInShadow(
 {
     const double epsilon = 0.001;
 
-    const Vec3 shadowOrigin = point + normal * epsilon;
-    const Vec3 shadowToLight = light.position - shadowOrigin;
+    const Vec3 shadowOrigin =
+        point + normal * epsilon;
 
-    const double distanceToLight = shadowToLight.length();
+    const Vec3 shadowToLight =
+        lightPoint - shadowOrigin;
+
+    const double distanceToLight =
+        shadowToLight.length();
 
     Ray shadowRay(
         shadowOrigin,
@@ -106,6 +129,7 @@ bool isInShadow(
             return true;
         }
     }
+
     for (const Triangle& triangle : tetrahedron)
     {
         HitRecord shadowHit;
@@ -121,6 +145,7 @@ bool isInShadow(
             return true;
         }
     }
+
     if (sphere.material.type != MaterialType::Transparent)
     {
         HitRecord shadowHit;
@@ -241,15 +266,34 @@ Vec3 randomCosineDirection(const Vec3& N)
         + N * localZ
         ).normalized();
 }
+Vec3 sampleAreaLight(const AreaLight& light)
+{
+    const double x =
+        light.center.x
+        + (randomDouble() - 0.5) * light.width;
+
+    const double y =
+        light.center.y
+        + (randomDouble() - 0.5) * light.height;
+
+    return Vec3(
+        x,
+        y,
+        light.center.z
+    );
+}
+
 //Mucho important 
 Vec3 traceRay(
     const Ray& ray,
     const std::vector<Triangle>& room,
     const std::vector<Triangle>& tetrahedron,
+    const std::vector<Triangle>& lightGeometry,
     const Sphere& sphere,
-    const PointLight& light,
+    const AreaLight& light,
     int depth,
-	bool useMonteCarloDiffuse
+    bool useMonteCarloDiffuse,
+    bool previousWasSpecular
 )
 {
     if (depth <= 0)
@@ -263,6 +307,7 @@ Vec3 traceRay(
         ray,
         room,
         tetrahedron,
+        lightGeometry,
         sphere,
         0.001,
         1e30,
@@ -271,35 +316,69 @@ Vec3 traceRay(
     {
         return Vec3(0.0, 0.0, 0.0);
     }
+    if (hit.material.type == MaterialType::Light)
+    {
 
+    return light.color * light.radiance;
+    }
     // Diffuse shading
     if (hit.material.type == MaterialType::Diffuse)
     {
         Vec3 directLight(0.0, 0.0, 0.0);
 
+        const Vec3 lightPoint =
+            sampleAreaLight(light);
+
         if (!isInShadow(
             hit.point,
             hit.normal,
-            light,
+            lightPoint,
             room,
             tetrahedron,
             sphere
         ))
         {
-            const Vec3 toLight = light.position - hit.point;
-            const double distanceSquared = toLight.lengthSquared();
-            const Vec3 lightDirection = toLight.normalized();
+            const Vec3 toLight =
+                lightPoint - hit.point;
 
-            const double cosOmega = std::max(
-                0.0,
-                dot(hit.normal, lightDirection)
-            );
+            const double distanceSquared =
+                toLight.lengthSquared();
 
-            const double irradiance =
-                light.intensity * cosOmega / distanceSquared;
+            const Vec3 lightDirection =
+                toLight.normalized();
+
+            const double cosSurface =
+                std::max(
+                    0.0,
+                    dot(hit.normal, lightDirection)
+                );
+
+            const Vec3 lightNormal =
+                light.normal();
+
+            const double cosLight =
+                std::max(
+                    0.0,
+                    dot(lightNormal, -lightDirection)
+                );
+
+            const double geometry =
+                cosSurface * cosLight
+                / distanceSquared;
+
+            const double lightArea =
+                light.width * light.height;
+
+            const double pi =
+                3.141592;
 
             directLight =
-                hit.material.color * light.color * irradiance;
+                hit.material.color
+                * light.color
+                * light.radiance
+                * geometry
+                * lightArea
+                / pi;
         }
 
         if (!useMonteCarloDiffuse)
@@ -336,10 +415,12 @@ Vec3 traceRay(
             diffuseRay,
             room,
             tetrahedron,
+            lightGeometry,
             sphere,
             light,
             depth - 1,
-            useMonteCarloDiffuse
+            useMonteCarloDiffuse,
+            false
         );
 		// Combine direct and indirect light, scaling the indirect light by the material color and rho
 		//Russian roulette termination: scale the indirect light by the material color and rho to account for the probability of continuing the path
@@ -366,10 +447,12 @@ Vec3 traceRay(
             reflectedRay,
             room,
             tetrahedron,
+            lightGeometry,
             sphere,
             light,
             depth - 1,
-            useMonteCarloDiffuse
+            useMonteCarloDiffuse,
+            true
         );
     }
     if (hit.material.type == MaterialType::Transparent)
@@ -464,10 +547,12 @@ Vec3 traceRay(
             childRay,
             room,
             tetrahedron,
+            lightGeometry,
             sphere,
             light,
             depth - 1,
-            useMonteCarloDiffuse
+            useMonteCarloDiffuse,
+            true
         );
     }
 
@@ -478,7 +563,7 @@ Vec3 traceRay(
 
 int main()
 {
-	const int resolution = 500; //Change to apply variable resolution
+	const int resolution = 200; //Change to apply variable resolution
 
     const Vec3 eye(0.5, 2.0, 2.0);
 
@@ -499,18 +584,22 @@ int main()
         )
     );
 
-    PointLight light(
-        Vec3(2.0, 2.0, 3.8),
+    AreaLight light(
+        Vec3(2.0, 2.0, 3.99),
+        1.0,
+        1.0,
         Vec3(1.0, 1.0, 1.0),
-		5.0//Change to apply variable intensity
+		20.0 //Change to apply variable light intensity
     );
+    std::vector<Triangle> lightGeometry =
+        light.createGeometry();
 
     std::vector<Vec3> pixels(
         resolution * resolution,
         Vec3(0.0, 0.0, 0.0)
     );
 
-	const int samplesPerPixel = 500; //Change to apply variable samples per pixel
+	const int samplesPerPixel = 100; //Change to apply variable samples per pixel
     const auto startTime = std::chrono::high_resolution_clock::now();
 
     for (int j = 0; j < resolution; ++j)
@@ -542,11 +631,12 @@ int main()
                     ray,
                     room,
                     tetrahedron,
+                    lightGeometry,
                     sphere,
                     light,
-					6,//Max depth of recursion
-                    useMonteCarloDiffuse
-
+                    6,
+                    useMonteCarloDiffuse,
+                    true
                 );
             }
 

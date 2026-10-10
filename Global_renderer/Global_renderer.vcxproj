@@ -144,6 +144,7 @@
     <ClCompile Include="Scene.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AreaLight.h" />
     <ClInclude Include="HitRecord.h" />
     <ClInclude Include="Image.h" />
     <ClInclude Include="Intersection.h" />
